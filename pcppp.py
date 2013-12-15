@@ -250,13 +250,13 @@ def main():
                     "Downloading PDFs for parcel of category 685: Parcel %s",
                     parcel.parcel_number,
                 )
-                if not os.path.isdir(parcel.parcel_number):
-                    os.makedirs(parcel.parcel_number)
+                parcel_dir = os.path.join(RESULTS_DIR, parcel.parcel_number)
+                if not os.path.isdir(parcel_dir):
+                    os.makedirs(parcel_dir)
 
                 # Download the record card
                 path = os.path.join(
-                    RESULTS_DIR,
-                    parcel.parcel_number,
+                    parcel_dir,
                     'record-card.pdf',
                 )
                 r = requests.get(parcel.record_card_pdf_url, stream=True)
@@ -269,13 +269,12 @@ def main():
 
                 # Download the details
                 path = os.path.join(
-                    RESULTS_DIR,
-                    parcel.parcel_number,
-                    'detail.pdf',
+                    parcel_dir,
+                    'detail.html',
                 )
                 r = requests.get(parcel.details_pdf_url, stream=True)
                 if r.status_code != 200:
-                    logger.critical("Broken detail.pdf link.")
+                    logger.critical("Broken detail.html link.")
                     exit(1)
                 with open(path, 'wb') as f:
                     for chunk in r.iter_content(1024):
