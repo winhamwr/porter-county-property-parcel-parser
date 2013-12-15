@@ -1,13 +1,18 @@
 
+import requests
 from bs4 import BeautifulSoup
 from mechanize import Browser
 
 import json
 import logging
+import os
+import os.path
 from urlparse import urljoin
 
 logger = logging.getLogger('pcppp')
 logger.setLevel(logging.INFO)
+
+RESULTS_DIR = 'results'
 
 
 class ParcelDetail(object):
@@ -157,7 +162,6 @@ class ParcelSearchPage(object):
                     detail_content=response.read(),
                 ),
             )
-            previously_parsed_parcels.add(parcel_number)
 
             self.browser.back()
 
@@ -189,20 +193,33 @@ def main():
     b = Browser()
     search_page = ParcelSearchPage(browser=b)
 
+    previously_parsed_parcels = set()
     try:
-        with open('previously-parsed-parcels.txt', 'r') as previously_parsed_f:
+        with open(
+            os.path.join(
+                RESULTS_DIR,
+                'previously-parsed-parcels.txt',
+            ),
+            'r',
+        ) as previously_parsed_f:
             data_s = previously_parsed_f.read()
-            data = json.loads(data_s)
-            previously_parsed_parcels = set(data['previously-parsed-parcels'])
-            logger.info(
-                "Loaded %s previously-parsed-parcels",
-                len(previously_parsed_parcels),
-            )
+            try:
+                data = json.loads(data_s)
+                previously_parsed_parcels = set(
+                    data['previously-parsed-parcels'],
+                )
+                logger.info(
+                    "Loaded %s previously-parsed-parcels",
+                    len(previously_parsed_parcels),
+                )
+            except ValueError:
+                logger.warning(
+                    "Couldn't parse JSON from previously-parsed-parcels",
+                )
     except IOError:
         logger.info(
             "No previously-parsed-parcels found. Starting from scratch.",
         )
-        previously_parsed_parcels = set()
 
     # Perform the search for `Exempt` parcels
     search_response = search_page.get_exempt_parcel_response()
@@ -233,23 +250,52 @@ def main():
                     "Downloading PDFs for parcel of category 685: Parcel %s",
                     parcel.parcel_number,
                 )
-                r = requests.get(parcel., stream=True)
+                if not os.path.isdir(parcel.parcel_number):
+                    os.makedirs(parcel.parcel_number)
+
+                # Download the record card
+                path = os.path.join(
+                    RESULTS_DIR,
+                    parcel.parcel_number,
+                    'record-card.pdf',
+                )
+                r = requests.get(parcel.record_card_pdf_url, stream=True)
                 if r.status_code != 200:
-                    logger.critical("Broken PDF link.")
+                    logger.critical("Broken record-card.pdf link.")
                     exit(1)
                 with open(path, 'wb') as f:
                     for chunk in r.iter_content(1024):
                         f.write(chunk)
-                import ipdb; ipdb.set_trace()
-                # TODO:
-                # Create a folder named after the parcel_number
-                # Download both PDFs and put them in that folder
+
+                # Download the details
+                path = os.path.join(
+                    RESULTS_DIR,
+                    parcel.parcel_number,
+                    'detail.pdf',
+                )
+                r = requests.get(parcel.details_pdf_url, stream=True)
+                if r.status_code != 200:
+                    logger.critical("Broken detail.pdf link.")
+                    exit(1)
+                with open(path, 'wb') as f:
+                    for chunk in r.iter_content(1024):
+                        f.write(chunk)
             else:
                 logger.info("Parcel doesn't match: %s", parcel.parcel_number)
 
+            previously_parsed_parcels.add(parcel.parcel_number)
+
         logger.info("Marking pages parcels as parsed")
-        with open("previously-parsed-parcels.txt", 'w') as ppp_f:
-            data = {'previously-parsed-parcels': previously_parsed_parcels}
+        with open(
+            os.path.join(
+                RESULTS_DIR,
+                'previously-parsed-parcels.txt',
+            ),
+            'w',
+        ) as ppp_f:
+            data = {
+                'previously-parsed-parcels': list(previously_parsed_parcels),
+            }
             data_j = json.dumps(data)
             ppp_f.write(data_j)
 
