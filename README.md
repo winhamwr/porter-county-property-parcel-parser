@@ -12,7 +12,23 @@ but it's probably YAGNI.
 
 ## Usage
 
+	$ pip install -r requirements.txt
+	$ python pcppp.py
 
+Then sit back,
+relax,
+and watch things starting popping up
+in the `results/` folder.
+
+## Progress-Saving
+
+Progress is saved in a json file
+in the results folder.
+If things crash,
+it will use that file to avoid re-parsing
+parcels that have already finished.
+If you'd like to restart everything,
+just delete the `results/` folder.
 
 ## Credit
 
